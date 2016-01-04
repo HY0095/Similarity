@@ -21,6 +21,13 @@ import shutil
 import jieba
 import time
 import numpy as np
+from scipy import sparse
+import scipy as sp
+#import matplotlib.pyplot as plt
+from sklearn.cluster import KMeans
+from sklearn.decomposition import PCA
+from sklearn.preprocessing import scale
+from sklearn import metrics
 import linecache
 import datetime 
 import itertools
@@ -34,7 +41,7 @@ logging.basicConfig(format='%(asctime)s: %(levelname)s: %(message)s', level=logg
 # Step_01: Split raw documents words by word, and remove stopwords, punctuations 
 def Doc2Word(dirpath,stopword,punctuation, corpusdir):
 	
-	global tmpindex
+	
 	global indexfile
 	print "Step 1. ***********************************"		
 	print "        Process Remove Stopwords and Punctuations Started..."
@@ -52,67 +59,90 @@ def Doc2Word(dirpath,stopword,punctuation, corpusdir):
 	        for line in open(file_name).readlines():
 	            content = line.replace("\n", "").split("\t")[1]
 	            #print ' '.join(content)
-	            file_index = rundate+str(file_num)
-	            filenum = line.replace("\n", "").split("\t")[0]
-	            fileindex[int(file_index)] = filenum.strip()
-	            file_num+= 1
-	            texts   = jieba.cut(content)
-	            texts   = [word.strip() for word in texts if not word in Stopwords]
-	            texts   = [word.strip() for word in texts if not word in Punctuations]
-	            outtexts= ' '.join(texts)
-	            Outfile.writelines(outtexts.encode("utf-8") + "\n")
-	            	            
-	        #line       = open(file_name).read()
-	        #content    = str(line).strip()      
-	        #file_num  += 1	        
-	        #texts      = jieba.cut(content)
-	        #texts      = [word.strip() for word in texts if not word in Stopwords]   # texts filtered stopwords
-	        #texts      = [word.strip() for word in texts if not word in Punctuations]   # texts filtered punctuations
-	        #outtexts   = ' '.join(texts)   # Prepare to write into file
-	        #print outtexts
-	        #Outfile.writelines(outtexts.encode('utf-8') + '\n')
+	            #  &&&&&&&&&&&&
+	            #file_index = rundate+str(file_num)
+	            if file_num >= 100000 :
+	                print "**** ErrorMessage: file_num < 100000 is not satisfied ! ****"
+	                raise SystemExit
+	            else :
+	                file_index = int(rundate)*100000+file_num
+	                filenum = line.replace("\n", "").split("\t")[0]
+	                fileindex[file_index] = filenum.strip()
+	                file_num+= 1
+	                texts   = jieba.cut(content)
+	                texts   = [word.strip() for word in texts if not word in Stopwords]
+	                texts   = [word.strip() for word in texts if not word in Punctuations]
+	                outtexts= ' '.join(texts)
+	                Outfile.writelines(outtexts.encode("utf-8") + "\n")
 	Outfile.close()
-	tmpindex = sorted(fileindex.keys())
-	print fileindex
-	print tmpindex
 		
 	indexfile  = corpusdir+'/doc2index_'+rundate+'.txt'
 	Dict2Txt1(fileindex, indexfile)
 	
 	infile = os.path.join(corpusdir, 'doc2words.txt')
-	cmd = "sed -i '" + "1d' '" + infile + "'"
+	#update: 20160104
+	#cmd = "sed -i '" + "1d' '" + infile + "'"
 	#print "============"+cmd
 	#os.system(cmd)
 	print "***********************************"
 	print "Process Remove Stopwords and Punctuations Finished..."
-	return infile
 
+# Step_02: Add Corpus
 
- # Step_02: Calculate similatities of documents, 
+def AddCorpus(newpath):
+    print "Step 2. **********************************"
+    print "         Add Corpus"
+    contexts   = [[word for word in line.split()] for line in open(newpath)]
+    # Remove unique words from context
+    all_stems  = sum(contexts, [])
+    stems_once = set(stem for stem in set(all_stems) if all_stems.count(stem) == 1)
+    texts      = [[stem for stem in text if stem not in stems_once] for text in contexts]
+    corpuspath = corpusdir+'/corpus_'+rundate+'.txt'
+    Outfile    = open(corpuspath, 'w')
+    for stem in texts :
+        outtexts  = ' '.join(stem)
+        Outfile.writelines(outtexts.encode('utf-8')+'\n')
+    Outfile.close()
+    
+    cmds1 = 'cat '+corpuspath+' >> '+corpusdir+'/corpus.txt'
+    print "cmds1 = " + cmds1
+    os.system(cmds1)
+    corpuspath = corpusdir+'/corpus.txt'
+    print ' ==================== '
+    print corpuspath
+    cmds2 = 'cat '+corpusdir+'/doc2index_'+rundate+'.txt'+'>> '+corpusdir+'/corpus_index.txt'
+    print cmds2
+    os.system(cmds2)
+    indexfile = corpusdir+'/corpus_index.txt'
 
-def Doc2Similarity(infile, threshold, corpusdir):   
+ # Step_03: Calculate similatities of documents, 
+
+def Doc2Similarity(threshold, corpusdir):   
 	
-	global corekeys 
-	print "Step 2. ***********************************"
+	global corekeys
+	global tmpindex
+	print "Step 3. ***********************************"
 	print "        Process Compute Documents Similarities Started..."
-	contexts   = [[word for word in line.split()] for line in open(infile)]
+	contexts   = [[word for word in line.split()] for line in open(corpusdir+'/corpus.txt')]
 	# Remove unique words from context
-	all_stems  = sum(contexts, [])
-	stems_once = set(stem for stem in set(all_stems) if all_stems.count(stem) == 1)
-	texts      = [[stem for stem in text if stem not in stems_once] for text in contexts]
-		
-	# Write Corpus into txt file
-	corpuspath = corpusdir+'/corpus_'+rundate+'.txt'
-	Outfile    = open(corpuspath, 'w')
+	#all_stems  = sum(contexts, [])
+	#stems_once = set(stem for stem in set(all_stems) if all_stems.count(stem) == 1)
+	texts      = [[stem for stem in text ] for text in contexts]
 	
-	for stem in texts:
-	    outtexts  =  ' '.join(stem)   # Prepare to write into file
-	    Outfile.writelines(outtexts.encode('utf-8')+'\n')
-	Outfile.close()
+	fileindex = {}
+	for line in open(corpusdir+'/corpus_index.txt'):
+	    text = line.strip().split('\t')
+	    fileindex[int(text[0])] = text[1].strip()
+	    
+	abc  = sorted(fileindex.keys())
+	#print 'filenidex = '
+	#print fileindex
+	#print 'abc'
+	#print abc
 	
 	class FTCorpus(object):	    
 	    def __iter__(self):
-	        for line in open(corpuspath):  # self.
+	        for line in open(corpusdir+'/corpus.txt'):  # self.
 	            # football corpus new in document per line,tokens separated by whitespace
 	            yield line.split() #
 	
@@ -122,42 +152,112 @@ def Doc2Similarity(infile, threshold, corpusdir):
 	corpus      = [dictionary.doc2bow(text) for text in Corp] # get bag-of-word
 	tfidf       =  models.TfidfModel(corpus)   # Create TF-IDF Model
 	corpus_tfidf= tfidf[corpus]
+	lda         = models.LdaMulticore(corpus_tfidf, num_topics=50, passes=1, iterations=50, id2word=dictionary)
+	ldamodel    = corpusdir+'/lda_'+rundate+'_model'
+	lda.save(ldamodel)
+	aa          = lda[corpus_tfidf]
+	s_l         = []
+	for ll in aa :
+	    s_l.append(ll)
+	s_m  = List2SP(s_l)
+	data = scale(s_m, with_mean = False)
+	reduced_data = PCA(n_components = 5).fit_transform(data.toarray())
+	kmeans = KMeans(init='k-means++', n_clusters=10,n_init=10)
+	kmeans.fit(reduced_data)
+	clus_pred = kmeans.predict(reduced_data)
+	centroids = kmeans.cluster_centers_
 	
-	lsi = models.LsiModel(corpus_tfidf, id2word = dictionary, num_topics = 10)
-	corpus_lsi = lsi[corpus_tfidf]
-	for doc in corpus_lsi:
-	    print doc
-	
-	# Use Similarity Package to calculate similarities, instead of using MatrixSimilarity, which needn't load corpus into memory
-	index       = similarities.Similarity(corpusdir+'/index',corpus, num_features = len(dictionary))	
-	i           = 0
-	print '*** threshold = ' + str(threshold)
-	dictcluster = {}
-	for text in corpus_tfidf:
-	    dict_tmp = {}
-	    sims_tmp = list(index[text])
-	    print sims_tmp
-	    # Use Threshold carefully ! 
-	    #dict_tmp[int(tmpindex[i])]  = [tmpindex[k] for k,x in enumerate(sims_tmp) if x >= (max(sims_tmp)-threshold)]
-	    #dict_tmp[int(tmpindex[i])]  = [tmpindex[k] for k,x in enumerate(sims_tmp) if x >= max(np.percentile(sims_tmp, 99.9), max(sims_tmp)*0.9)]
-	    dict_tmp[int(tmpindex[i])] = [tmpindex[k] for k,x in enumerate(sims_tmp) if x >= max(sims_tmp)*0.9]
-	    print dict_tmp
-	    if i == 0 :
-	        dictcluster = dict_tmp   # Initialization Dictionary Cluster
+	k_s = {}
+	for ii, p in enumerate(clus_pred):
+	    if p in k_s :
+	        k_s[p].append(ii) 
 	    else :
-	        dictcluster = DictUnin(dictcluster, dict_tmp)   #Update Dictionary Cluster
-	    i += 1
+	        k_s[p] = []
+	        k_s[p].append(ii)
+	
+	result = []
+	
+	for ii, cent in enumerate(centroids):
+	    ll  = k_s[ii]
+	    dis = []
+	    ind = []
+	    for index in ll:
+	        dis_index = dist(cent, reduced_data[index])
+	        dis.append(dis_index)
+	        ind.append(index)
+	    dis_min = np.min(dis)
+	    index_min = ll[dis.index(dis_min)]  
+	    result.append([ii, index_min, ll])
+	    
+	# Write out kmeans_cluster_result
+	#topic_cluster = corpusdir+'/topic_cluster_'+rundate+'.txt'
+	
+	for ii in range(len(result)):
+	    tmpcmd = 'mkdir '+corpusdir+'/topic_cluster_'+str(ii)
+	    os.system(tmpcmd)
+	    topic_cluster = corpusdir+'/topic_cluster_'+str(ii)+'/cluster.txt'
+	    fout = open(topic_cluster, 'w')
+	    fout.write('%s \t' % result[ii][0])
+	    fout.write('%s \t' % abc[result[ii][1]])
+	    fout.write('%s \t' % [abc[ij] for ij in result[ii][2]])
+	    fout.write('\n')
+	    fout.write('\n')
+	    fout.write('%s \t' % result[ii][0])
+	    fout.write('%s \t' % result[ii][1])
+	    fout.write('%s \t' % result[ii][2])
+	    fout.close()
+	    topic_corpus = corpusdir+'/topic_cluster_'+str(ii)+'/corpus.txt'
+	    subcorpustext = []
+	    tmpindex = []
+	    fout = open(topic_corpus, 'w')
+	    if len(result[ii][2]) >= 1:
+	        for jj in result[ii][2]:
+	            subcorpustext.append(texts[jj])
+	            tmpindex.append(abc[jj])
+	            tmp_corpus = ' '.join(texts[jj])
+	            fout.writelines(tmp_corpus.encode('utf-8')+'\n')
+	    fout.close()
+	    
+	    print "^^^^^^^ ii ^^^^^^^^^^^^^"
+	    print "ii = " + str(ii)
+	    print "^^^^^^^^^^^^tmpindex^^^^^^^^^^^^^"
+	    print tmpindex
+	    
+	    dictionary  = corpora.Dictionary(subcorpustext)
+	    tmpcorpus   = [dictionary.doc2bow(text) for text in subcorpustext]
+	    tfidf       =  models.TfidfModel(tmpcorpus)
+	    corpus_tfidf= tfidf[tmpcorpus]
+	    # Use Similarity Package to calculate similarities, instead of using MatrixSimilarity, which needn't load corpus into memory
+	    index       = similarities.Similarity(corpusdir+'/topic_cluster_'+str(ii)+'/index',tmpcorpus, num_features = len(dictionary))
+	    i           = 0
+	    print '*** threshold = ' + str(threshold)
+#####
+######	
+	    dictcluster = {}
+	    for text in corpus_tfidf:
+	        dict_tmp = {}
+	        sims_tmp = list(index[text])
+	        print "******* sims_tmp ***********"
+	        print sims_tmp
+	        # Use Threshold carefully ! 
+	        #dict_tmp[int(tmpindex[i])]  = [tmpindex[k] for k,x in enumerate(sims_tmp) if x >= (max(sims_tmp)-threshold)]
+	        #dict_tmp[int(tmpindex[i])]  = [tmpindex[k] for k,x in enumerate(sims_tmp) if x >= max(np.percentile(sims_tmp, 99.9), max(sims_tmp)*0.9)]
+	        dict_tmp[int(tmpindex[i])] = [tmpindex[k] for k,x in enumerate(sims_tmp) if x >= max(sims_tmp)*threshold]
+	        print dict_tmp
+	        if i == 0 :
+	            dictcluster = dict_tmp   # Initialization Dictionary Cluster     
+	        else :
+	            dictcluster = DictUnin(dictcluster, dict_tmp)   #Update Dictionary Cluster           
+	        i += 1
 	    #print dictcluster
-	print "Dict_Cluster"
-	print dictcluster
-	corekeys  = dictcluster.keys()
-
-	txt_name  = corpusdir+'/seedindex_'+rundate+'.txt'
-	Dict2Txt2(dictcluster, txt_name) #Output cluster_dictionary into txt file
-	
-	WriteSeedCorpus(corpuspath, corpusdir+'/seedcorpus_'+rundate+'.txt')  #Output seedcorpus into txt
-	
-	#ReadSeedWrite(txt_name, 0, seedindex)
+	    print "Dict_Cluster"
+	    print dictcluster
+	    corekeys  = dictcluster.keys()
+	    
+	    txt_name  = corpusdir+'/topic_cluster_'+str(ii)+'/seedindex.txt'
+	    Dict2Txt2(dictcluster, txt_name) #Output cluster_dictionary into txt file
+	   # WriteSeedCorpus(topic_corpus, corpusdir+'/topic_cluster_'+str(ii)+'/seedcorpus.txt')  #Output seedcorpus into txt
+	    #ReadSeedWrite(txt_name, 0, seedindex)
 
 	print "Process Compute Documents Similarities Finished..."
 
@@ -175,6 +275,9 @@ def WriteSeedCorpus(infile, outfile):
     #for line in open(infile).readlines()[coreindex]:
     #    out.writelines(line.encode('utf-8')+'\n')
     out.close()           
+
+def dist(x,y):
+    return np.sqrt(np.sum((x-y)**2))       
 
 def position(rawlist, threshold):
     return [i for i,x in enumerate(rawlist) if x >= threshold]
@@ -214,7 +317,24 @@ def Txt2Dict(file_name):
     for line in open(file_name) :
         kv = line.strip().split('\t')
         dict_name[int(kv[0])] = [ int(v) for v in kv[1:]]        
-    return dict_name
+    return dict_name                
+                   
+def List2SP(List, dim = 0):
+    """Convert List to Sparse Matrix."""
+    list_row   = list()
+    list_col   = list()
+    list_value = list()
+    for row, t in enumerate(List):
+        for tt in t:
+            list_row.append(row)
+            list_col.append(tt[0])
+            list_value.append(tt[1])
+    if dim == 0:
+        sparse_matrix = sparse.coo_matrix((list_value, (list_row, list_col)))
+    else :
+        row_set = set(list_row)
+        sparse_matrix = sparse.coo_matrix((list_value, (list_row, list_col)), shape = [len(row_set), dim])        
+    return sparse_matrix
 
 def DictUnin(dict1, dict2):
     for k1, v1 in dict1.items():
@@ -242,7 +362,7 @@ def tips():
 def validateopts(opts):
 	Stopword     = '/home/dzn/Similarity/stopwords.txt'     # Default StopWord File
 	Punctuation  = '/home/dzn/Similarity/punctuations.txt'  # Default Punctuation File
-	Threshold    = 0.15                                    # Default similarity threshold
+	Threshold    = 0.9                                   # Default similarity threshold
 	for option, value in opts:
 		if option  in ["-h", "--help"]:
 			tips()
@@ -258,21 +378,20 @@ def validateopts(opts):
 		    Corpusdir = value
 		elif option in ["--rundate", "-r"]:
 		    Rundate =value
-		elif option in ["--seedindex", "-o"]:
-		    Seedindex = value
 		elif option == "-d":
 			print "usage -d"
-	return Input, Stopword, Punctuation, Threshold, Corpusdir, Rundate, Seedindex
+	return Input, Stopword, Punctuation, Threshold, Corpusdir, Rundate
 	
 def main():
 	global rundate
-	global seedindex
+	global corpuspath
+	global corpusdir
 	try:
-		opts,args = getopt.getopt(sys.argv[1:],"hi:s:p:t:c:r:o:d",["input=","stopword=","punctuation=","threshold=","corpusdir=","rundate=","seedindex=","help"])
+		opts,args = getopt.getopt(sys.argv[1:],"hi:s:p:t:c:r:o:d",["input=","stopword=","punctuation=","threshold=","corpusdir=","rundate=","help"])
 	except getopt.GetoptError:
 		tips()
 	if len(opts) >= 1:
-		dirpath,stopword,punctuation,threshold,corpusdir,rundate,seedindex = validateopts(opts)
+		dirpath,stopword,punctuation,threshold,corpusdir,rundate = validateopts(opts)
 	else:
 		print "ErrorMessage: Please Check What Your Input !"
 		tips()
@@ -287,18 +406,27 @@ def main():
 	print 'punctuation= ' + punctuation
 	print 'Corpusdir  = ' + corpusdir
 	print 'Rundate    = ' + rundate
-	print 'Seedindex  = ' + seedindex
 	print 'rundate    = ' + rundate	
 	print '***************************'
 	
+	corpuspath = corpusdir+'/corpus_'+rundate+'.txt'
+	
 	start_CPU = time.clock()
-	tmpfile = Doc2Word(dirpath, stopword, punctuation, corpusdir)
+	Doc2Word(dirpath, stopword, punctuation, corpusdir)
 	end_CPU = time.clock()
+	print "~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~"
+	print("Doc2Word Costs: %f CPU seconds" % (end_CPU - start_CPU))
+
+	start_CPU = time.clock()
+	AddCorpus(corpusdir+'/doc2words.txt')
+	end_CPU = time.clock()
+	print "corpuspath = "+corpuspath
+	print "indexfile  = "+indexfile
 	print "~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~"
 	print("Doc2Word Costs: %f CPU seconds" % (end_CPU - start_CPU))
 	
 	start_CPU = time.clock()
-	Doc2Similarity(tmpfile, threshold, corpusdir)
+	Doc2Similarity(threshold, corpusdir)
 	end_CPU = time.clock()
 	print "~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~"
 	print("Doc2Similarity Costs: %f CPU seconds" % (end_CPU - start_CPU))
