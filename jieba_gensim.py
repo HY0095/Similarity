@@ -161,10 +161,13 @@ def Doc2Similarity(threshold, corpusdir):
 	    s_l.append(ll)
 	s_m  = List2SP(s_l)
 	data = scale(s_m, with_mean = False)
-	reduced_data = PCA(n_components = 5).fit_transform(data.toarray())
+	#reduced_data = PCA(n_components = 5).fit_transform(data.toarray())
+	data = data.toarray()
 	kmeans = KMeans(init='k-means++', n_clusters=10,n_init=10)
-	kmeans.fit(reduced_data)
-	clus_pred = kmeans.predict(reduced_data)
+	#kmeans.fit(reduced_data)
+	kmeans.fit(data)
+	#clus_pred = kmeans.predict(reduced_data)
+	clus_pred = kmeans.predict(data)
 	centroids = kmeans.cluster_centers_
 	
 	k_s = {}
@@ -182,7 +185,8 @@ def Doc2Similarity(threshold, corpusdir):
 	    dis = []
 	    ind = []
 	    for index in ll:
-	        dis_index = dist(cent, reduced_data[index])
+	        #dis_index = dist(cent, reduced_data[index])
+	        dis_index = dist(cent, data[index])
 	        dis.append(dis_index)
 	        ind.append(index)
 	    dis_min = np.min(dis)
@@ -256,7 +260,7 @@ def Doc2Similarity(threshold, corpusdir):
 	    
 	    txt_name  = corpusdir+'/topic_cluster_'+str(ii)+'/seedindex.txt'
 	    Dict2Txt2(dictcluster, txt_name) #Output cluster_dictionary into txt file
-	   # WriteSeedCorpus(topic_corpus, corpusdir+'/topic_cluster_'+str(ii)+'/seedcorpus.txt')  #Output seedcorpus into txt
+	    WriteSeedCorpus(topic_corpus, corpusdir+'/topic_cluster_'+str(ii)+'/seedcorpus.txt')  #Output seedcorpus into txt
 	    #ReadSeedWrite(txt_name, 0, seedindex)
 
 	print "Process Compute Documents Similarities Finished..."

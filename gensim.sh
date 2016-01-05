@@ -1,6 +1,6 @@
 #!/bin/bash
 
-for((i=1;i>=1;i--));do
+for((i=3;i>=3;i--));do
 
 run_date=`date +%Y-%m-%d --date="-${i} day"`
 rundate=`date +%Y%m%d --date="-${i} day"` 
