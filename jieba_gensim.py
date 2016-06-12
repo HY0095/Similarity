@@ -203,12 +203,10 @@ def Doc2Similarity(threshold, corpusdir):
 	    fout = open(topic_cluster, 'w')
 	    fout.write('%s \t' % result[ii][0])
 	    fout.write('%s \t' % abc[result[ii][1]])
-	    fout.write('%s \t' % [abc[ij] for ij in result[ii][2]])
+	    for ij in result[ii][2] :
+	        fout.write('%s ,' % abc[ij])
 	    fout.write('\n')
-	    fout.write('\n')
-	    fout.write('%s \t' % result[ii][0])
-	    fout.write('%s \t' % result[ii][1])
-	    fout.write('%s \t' % result[ii][2])
+
 	    fout.close()
 	    topic_corpus = corpusdir+'/topic_cluster_'+str(ii)+'/corpus.txt'
 	    subcorpustext = []
@@ -312,7 +310,7 @@ def Dict2Txt2(dict_name, file_name):
     for key, value in dict_name.items():
         txt.write('%s \t' % (key))
         for i in xrange(len(value)):
-            txt.write('%s \t' % value[i])
+            txt.write('%s ,' % value[i])
         txt.write('\n')
     txt.close()    
 
@@ -364,8 +362,8 @@ def tips():
 	sys.exit(2)
 
 def validateopts(opts):
-	Stopword     = '/home/dzn/Similarity/stopwords.txt'     # Default StopWord File
-	Punctuation  = '/home/dzn/Similarity/punctuations.txt'  # Default Punctuation File
+	Stopword     = '/home/dzn/Project/d01_Similarity/stopwords.txt'     # Default StopWord File
+	Punctuation  = '/home/dzn/Project/d01_Similarity/punctuations.txt'  # Default Punctuation File
 	Threshold    = 0.9                                   # Default similarity threshold
 	for option, value in opts:
 		if option  in ["-h", "--help"]:

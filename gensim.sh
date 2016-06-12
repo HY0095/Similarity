@@ -1,6 +1,6 @@
 #!/bin/bash
 
-for((i=3;i>=3;i--));do
+for((i=1;i>=1;i--));do
 
 run_date=`date +%Y-%m-%d --date="-${i} day"`
 rundate=`date +%Y%m%d --date="-${i} day"` 
@@ -12,18 +12,8 @@ week=`date +%W --date="-${i} day"`
 corpusdir="/home/dzn/hd/corpus"
 corpusbackup="/home/dzn/hd/corpus_backup"
 docsdir="/home/dzn/Hd_news"
-pyscrips="/home/dzn/Similarity"
-
-
-#corpuspath=${corpusdir}/seedcorpus.txt
-#indexpath=${corpusdir}/seedindex.txt
-# Create Corpus File 
-#if [ ${day} == 01 ];then
-#rm -rf ${corpusdir}/month_${month}
-#mkdir ${corpusdir}/month_${month}
-#rm -rf ${corpuspath} ${indexpath}
-#touch ${corpuspath} ${indexpath}
-#fi
+#pyscrips="/home/dzn/Similarity"
+pyscrips="/home/dzn/Project/d01_Similarity"
 
 corpusday=${corpusdir}/month_${month}/${rundate}
 rm -rf ${corpusday}
@@ -38,7 +28,7 @@ rm -rf ${corpusday}/corpus_index.txt
 touch ${corpusday}/corpus_index.txt
 
 
-for((j=30;j>=1;j--));do
+for((j=5;j>=1;j--));do
 tmpdate=`date +%Y%m%d --date="-$(($i+$j)) day"`
 tmpmonth=`date +%m --date="-$(($i+$j)) day"`
 echo $tmpdate
